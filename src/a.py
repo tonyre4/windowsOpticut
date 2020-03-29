@@ -32,7 +32,7 @@ class ordenes:
         #me.computeCuts()
 
     def computeCuts(me):
-        cuts = np.array(me.persianas.loc[:,["TrackWidthNumeric", "LouverQty"]])
+        cuts = np.array(me.persianas.loc[:,["FinalLouverLengthNumeric", "LouverQty"]])
         
 
         #agregando valances
@@ -62,27 +62,6 @@ class ordenes:
         me.computedCuts = meas
         return meas
 
-    def buscarCorte(me,corte):
-        acaba = False
-
-        for p in me.ps:
-            if p.setCut(corte):
-                if p.slot == -1:
-                    p.slot = int(me.slotCtr%10)+1
-                    p.car = int(me.slotCtr/10)+1
-                    me.slotCtr += 1
-                if p.RDY:
-                    #print("Aqui termina la orden del slot ", p.slot," del carro ", p.car)
-                    acaba = True
-                me.slotternow.append(p.slot)
-                break
-        else:
-            print("Error!, No se encontró el corte")
-            exit()
-        #print("Corte:",corte)
-        #print("Slot:", p.slot)
-        #print("Carro:", p.car)
-        return acaba
     
     def buscarCorte2(me,corte):
         acaba = False
@@ -100,57 +79,13 @@ class ordenes:
                 me.carr.append(p.car)
                 break
         else:
-            print("Error!, No se encontró el corte")
+            print("Error!, No se encontro el corte")
             exit()
         #print("Corte:",corte)
         #print("Slot:", p.slot)
         #print("Carro:", p.car)
         return acaba
 
-    def printReport2(me, optimizado):
-        opti = optimizado.copy()
-
-        for ip,p in enumerate(me.ps):
-            print("Computando orden %d" % ip)
-            while not p.RDY:
-                ##Encontrar el mejor de todos los cortes que puede llenar el pedido
-                maxoc = 0
-                maxind = None
-                for ii,o in enumerate(opti):
-                    if o["veces"]==0:
-                        continue
-                    if p.Lmeas in o["cortes"]:
-                        cnt = o["cortes"].count(p.Lmeas)
-                        if maxoc<cnt:
-                            maxind = ii
-                ##Ya encontrado ahora hay que ir bajando las veces en cada corte
-                try:
-                    mc = opti[maxind]
-                except:
-                    print(p.Lqty,p.Lqtymade)
-                    exit()
-
-                for i in range(mc["veces"]):
-                    for c in mc["cortes"]:
-                        if c == p.Lmeas: #Si es un corte de la persiana
-                            p.Lqtymade += 1
-                            p.isReady()
-                        elif c == p.Vmeas and p.Vmade == 0: ## Por si encuentra el valance
-                            p.Vmade = 1
-                            p.isReady()
-                        else: # Buscar de quien es
-                            for ii,pp in enumerate(me.ps):
-                                if ii==ip:
-                                    continue
-                                if pp.Lmeas == c:
-                                    p.Lqtymade += 1
-                                    pp.isReady()
-                                elif c == pp.Vmeas and pp.Vmade == 0:
-                                    pp.Vmade = 1
-                                    p.isReady()
-                    mc["veces"] -= 1
-                    if p.RDY:
-                        break
 
     def printReport3(me, optimizado):
 
@@ -305,66 +240,6 @@ class ordenes:
 
 
 
-    def printReport(me, optimizado):
-        me.slotterpast = []
-        me.slotternow = []
-        me.terminados = []
-        me.veces = 0
-
-        #print(me.cuts)
-
-        for o in optimizado:
-            me.o = o
-            #print("Para el corte:", o["cortes"])
-            me.veces = 0
-            me.slotterpast = []
-            for i in range(o["veces"]):
-                impreso = False
-                me.terminados = []
-                me.slotternow = []
-                for c in o["cortes"]:
-                    me.terminados.append(me.buscarCorte(c))
-
-                if me.slotterpast != []:
-                    if me.slotterpast == me.slotternow:
-                        me.veces += 1
-                    else:
-                        if me.veces != 0:
-                            me.printForma(o["cortes"], me.veces, me.slotterpast, None)
-                        impreso = True
-                        me.veces = 1
-
-                    if any(me.terminados) and not impreso:
-                        if me.veces != 0:
-                            me.printForma(o["cortes"], me.veces, me.slotternow, None)
-                        impreso = True
-                        me.veces = 0
-                else:
-                    me.veces += 1
-
-                me.slotterpast = me.slotternow.copy()
-            else:
-                if not impreso:
-                    if me.veces != 0:
-                        me.printForma(o["cortes"], me.veces, me.slotternow, None)
-
-    def printForma(me, patron, veces, slots, carro):
-        ss =  "Patron:\t" + str(patron) + " --- [//%.2f//] -> %.2f%%\n" % (me.o["scrap"], me.o["Porcentaje"])
-        ss += "Slots: \t["
-        for i, s in enumerate(slots):
-            if me.terminados[i]:
-                z = "* "
-            else:
-                z = " "
-            ss += str(s) + z
-        ss = ss[:-1] + "]\n"
-        ss += "Carro:" + "\n"
-        ss += "Veces:  x%d" % veces + "\n\n"
-
-        print(ss)
-
-
-
 class persiana:
     def __init__(me, feats, np):
         me.feats = feats
@@ -374,7 +249,7 @@ class persiana:
         me.color = me.nps[1]
         
         me.Lqty = me.feats.loc["LouverQty"] #Cantidad de louvers
-        me.Lmeas = me.feats.loc["TrackWidthNumeric"] #Medida de louvers
+        me.Lmeas = me.feats.loc["FinalLouverLengthNumeric"] #Medida de louvers
 
         me.slot = -1 #Slot
         me.car = -1 #Carro
@@ -437,7 +312,7 @@ class persiana:
 
 class sortHandler:
     def __init__(me,stockSize,cuts,num_prt,path_r):
-        me.load()
+        me.loadsolver()
 
         me.num_prt = num_prt
         me.cuts = cuts.sort_values(by=["LouverQty"])
@@ -459,7 +334,7 @@ class sortHandler:
         print(me.cuts)
         me.ordhand.printReport3(me.ordersSimple)
 
-    def load(me):
+    def loadsolver(me):
         cwd = os.getcwd()
         solverdir = 'cbc.exe'  # extracted and renamed CBC solver binary
         #solverdir = 'Cbc-2.7.5-win32-cl15icl11.1\\bin\\cbc.exe'  # extracted and renamed CBC solver binary
@@ -699,14 +574,16 @@ def main():
 
     path_r = "./reports/"
 
-    data = pd.read_csv(csv,sep=";")
+    type_dict  = {"WorkOrderNumber" : "str"}
+
+    data = pd.read_csv(csv,sep=";",dtype = type_dict)
     
     
     #Solo louvers
-    sl = data.dropna(axis=0, subset=['TrackWidthNumeric'])
+    sl = data.dropna(axis=0, subset=['FinalLouverLengthNumeric'])
     
     #color,track_width,qty_cuts
-    din = sl.loc[:,["WorkOrderNumber","LouverComponentNumber","TrackWidthNumeric","LouverQty","ValanceInsert ComponentNumber","ValanceBaseWidthNumeric"]].copy()
+    din = sl.loc[:,["WorkOrderNumber","LouverComponentNumber","FinalLouverLengthNumeric","LouverQty","ValanceInsert ComponentNumber","ValanceBaseWidthNumeric"]].copy()
    
     #obtener numeros de parte
     req = [] #lista de requisición
@@ -719,9 +596,9 @@ def main():
    
         p = pp.encode("ascii", errors="ignore").decode().replace(" ","")
 
-        print("Computando solución para numero de parte %s\n%d de %d" % (p,i+1,lll))
+        print("Computando solucion para numero de parte %s\n%d de %d" % (p,i+1,lll))
 
-        cuts = din.loc[din["LouverComponentNumber"]== pp ,["WorkOrderNumber","TrackWidthNumeric","LouverQty", "ValanceInsert ComponentNumber","ValanceBaseWidthNumeric"]]
+        cuts = din.loc[din["LouverComponentNumber"]== pp ,["WorkOrderNumber","FinalLouverLengthNumeric","LouverQty", "ValanceInsert ComponentNumber","ValanceBaseWidthNumeric"]]
 
         #Corre optimizador
         A = sortHandler(192.,cuts,p,path_r)
