@@ -41,7 +41,7 @@ class ordenes:
                 cuts = np.vstack([cuts,[p.getVW(),1]])
             else:
                 if not p.Vbool is None:
-                    print("ATENCIÓN!. El color del Valance de X no es el mismo que del louver. Este programa aún no está preparado para esta combinación!")
+                    print("ATENCION!. El color del Valance de X no es el mismo que del louver. Este programa aún no está preparado para esta combinacion!")
         
 
         #Valores de cortes ordenados
@@ -52,12 +52,6 @@ class ordenes:
             s = np.sum(cuts[np.where(cuts[:,0]==w),1])
             meas = np.vstack([meas,[w,s]])
 
-        #print("Cuts:")
-        #print(cuts)
-        #print("Unique")
-        #print(twn)
-        #print("Sum:")
-        #print(meas)
 
         me.computedCuts = meas
         return meas
@@ -66,45 +60,63 @@ class ordenes:
     def buscarCorte2(me,corte):
         acaba = False
 
-        for p in me.ps:
-            if p.setCut(corte):
-                if p.slot == -1:
+        for p in me.ps: #Para cada persiana
+            if p.setCut(corte): #Mete el corte del argumento y lo contabiliza
+                if p.slot == -1: #Si no tiene slot asignado, se le asigna con el counter
                     p.slot = int(me.slotCtr%10)+1
                     p.car = int(me.slotCtr/10)+1
                     me.slotCtr += 1
-                if p.RDY:
+                if p.VRDY:
+                    me.vals.append(True)
+                    p.VRDY = False
+                else:
+                    me.vals.append(False)
+                if p.RDY: #Si termina la orden retorna un True
                     #print("Aqui termina la orden del slot ", p.slot," del carro ", p.car)
                     acaba = True
-                me.slotter.append(p.slot)
-                me.carr.append(p.car)
+                me.slotter.append(p.slot) #Construye el arreglo de slots
+                me.carr.append(p.car) #Construye el arreglo de carros
                 break
         else:
             print("Error!, No se encontro el corte")
             exit()
-        #print("Corte:",corte)
-        #print("Slot:", p.slot)
-        #print("Carro:", p.car)
         return acaba
 
-
+    def printdf(me,df):
+        try:
+            for r in df.iterrows():
+                r = r[1]
+                print(r.at["idx"],"\t",dict(r.at["obj"])["cortes"],"\t",r.at["slots"],"\t",r.at["carro"],"\t",r.at["term"],"\t",r.at["vals"])
+            print("$$"*20)
+        except:
+            r = df
+            print(r.at["idx"],"\t",dict(r.at["obj"])["cortes"],"\t",r.at["slots"],"\t",r.at["carro"],"\t",r.at["term"],"\t",r.at["vals"])
+            print("$$"*20)
+ 
     def printReport3(me, optimizado):
 
         TODO = [] # D:
 
-        obs = []
+        #obs = []
 
-        for o in optimizado:
-            oo = optiti(o)
-            obs.append(oo)
-            for i in range(o["veces"]):
+
+        #loop para asignar slots y carros para cada una de las persianas
+        for o in optimizado: #Por cada patron de corte
+            #oo = optiti(o) #guardarlo como un objeto
+            oo = dict(o) #para buscar por nombres
+            #obs.append(oo)
+            for i in range(oo["veces"]): #Por el numero de veces que se tiene que hacer
                 me.slotter = []
                 me.carr = []
-                for c in o["cortes"]:
-                    me.buscarCorte2(c)
+                me.vals = []
+                for c in oo["cortes"]: #Por cada corte de 1 solo patron
+                    me.buscarCorte2(c) #Encuentra el corte
                 me.slotter = tuple(me.slotter)
                 me.carr = tuple(me.carr)
-                TODO.append((oo,me.slotter,me.carr))
+                me.vals = tuple(me.vals)
+                TODO.append((o,me.slotter,me.carr,me.vals))
         
+        #Saca todas las formas unicas (quita las repetidas)
         unique = set(TODO)
 
         idxs = []
@@ -115,12 +127,15 @@ class ordenes:
         carord = []
         slotord = []
         terms = []
+        vals = []
+        cols = ["idx", "obj", "slots", "carro", "veces", "carord", "slotord","term","vals"]
 
-        cols = ["idx", "obj", "slots", "carro", "veces", "carord", "slotord","term"]
-
+        #Para cada patron unico se contabiliza cuantas hay
+        #Y se hace un registro nuevo de todos los cortes
         for i,u in enumerate(unique):
-            c = TODO.count(u)
+            c = TODO.count(u) #cuantos iguales al unico hay...
             #print(u[0].mydict["cortes"], "\t\t" ,u[1],u[2], c)
+            #Se obtienen los datos de cada uno
             idxs.append(i)
             objs.append(u[0])
             sl.append(u[1])
@@ -131,21 +146,23 @@ class ordenes:
             slotord.append(sum([z**2 for z in u[1]]))
             t = tuple(np.zeros(len(u[1]),np.uint8).tolist())
             terms.append(t)
+            vals.append(u[3])
 
         data = {cols[0] : idxs,
                 cols[1] : objs,
                 cols[2] : sl,
                 cols[3] : cr,
-                cols[4] : v,
+                cols[4] : v, #veces
                 cols[5] : carord,
                 cols[6] : slotord,
-                cols[7] : terms}
+                cols[7] : terms,
+                cols[8] : vals}
 
+        #generando un dataframe para el ordenamiento por carros y slots
         df = pd.DataFrame(data, columns = cols)
-
-
         df = df.sort_values(by=['carord','slotord'])
 
+        #Computa el numero de carros maximos y slots maximos por carro
         maxc = int(me.slotCtr/10)
         maxs = []
         for i in range(maxc):
@@ -155,9 +172,82 @@ class ordenes:
             c = int(me.slotCtr%10)
             if c!= 0:
                 maxs.append(int(me.slotCtr%10))
-      
-        wo = []
- 
+     
+
+        #me.printdf(df)
+        #moviendo valances al final
+        for idr,r in enumerate(df.iterrows()): #por cada fila
+            r = r[1]
+            if any(r.loc["vals"]): #si hay algun booleano de valance
+                cccf = [] #Cortes
+                sssf = [] #Slots
+                ccrf = [] #Carros
+                vvvf = [] #Valances bools
+                ccc = [] #Cortes
+                sss = [] #Slots
+                ccr = [] #Carros
+                vvv = [] #Valances bools
+                #me.printdf(r)
+                dic = dict(r.loc["obj"])
+                corts = list(dic["cortes"])
+                for i,vv in enumerate(r.loc["vals"]): #Por cada booleano de valance
+                    cort = corts[i]
+                    slo = r.loc["slots"][i]
+                    car = r.loc["carro"][i]
+                    val = vv
+
+                    #print(cort,slo,car,val)
+
+                    if not vv: #Si no es un valance (osea un louver) agregar datos
+                        ccc.append(cort)
+                        sss.append(slo)
+                        ccr.append(car)
+                        vvv.append(vv)
+                    else: #Si no es un valance (osea un louver) agregar datos
+                        cccf.append(cort)
+                        sssf.append(slo)
+                        ccrf.append(car)
+                        vvvf.append(vv)
+                
+                    #print(ccc,sss,ccr,vvv)
+                    #input("$$$$")
+                
+                for vv in zip(cccf,sssf,ccrf,vvvf):
+                    c1,s2,cr1,v1 = vv                    
+                    ccc.append(c1)
+                    sss.append(s2)
+                    ccr.append(cr1)
+                    vvv.append(v1)
+        
+                #print(ccc,sss,ccr,vvv)
+                #input("$$$$")
+
+                #Convirtiendo
+                ccc = tuple(ccc)
+                sss = tuple(sss)
+                ccr = tuple(ccr)
+                vvv = tuple(vvv)
+
+                #print(ccc,sss,ccr,vvv)
+                #print(df.iloc[idr])
+    
+                #asignando
+                dic["cortes"] = ccc
+
+                df.iat[idr,df.columns.get_loc("obj")] = frozenset(dic.items())
+                df.iat[idr,df.columns.get_loc("slots")] = sss
+                df.iat[idr,df.columns.get_loc("carro")] = ccr
+                df.iat[idr,df.columns.get_loc("vals")] = vvv
+
+                #print(df.iloc[idr])
+                #print("$$"*20)
+
+        #me.printdf(df)
+        #print("--"*20)
+
+
+        #Computa los finales de cada orden
+        wo = [] # Aqui almacena de cada carro por cada slot el worktag de cada cosa
         for i in range(maxc+1): #por cada carro
             cw = []
             for ii in range(maxs[i]): #Para el rango maximo de slots por carro
@@ -173,27 +263,21 @@ class ordenes:
                         if s == ii+1: #si el numero del slot de busqueda es el mismo
                             last = (iiii,iii) # guarda la posicion del row y posicion de la tupla
                 
-                #print("##"*20)
-                #tup = slots.iloc[last[0]].at['term'][last[1]] = ii+1
                 tup = df.iloc[last[0]].at['term']
                 tup = list(tup)
-                #print(tup)
                 tup [last[1]] = ii+1
                 tup = tuple(tup)
-                #print(df)
                 df.iat[last[0],df.columns.get_loc("term")] = tup
-                #print(df)
-                #print("##"*20)
                 
             wo.append(cw)
-                #print(slots)
-                #exit()
-                
 
-        me.writeReport(df,wo)
+    
+        #for r in df.iterrows():
+            #print(r.loc["idx"])#,r.loc["obj"].mydict["cortes"], r.loc["slots"], r.loc["carro"], r,loc["term"])
+            #exit()
 
+        me.writeReport(df,wo) #Mete las ordenes y el resumen de cada numero de parte
 
-        #Orden por carros
 
 
     def writeReport(me,df,wo):
@@ -204,20 +288,25 @@ class ordenes:
             r = r[1]
             ss += "%d veces:\t[" % (r.loc["veces"])
 
-            obj = r.loc["obj"].mydict
+            obj = dict(r.loc["obj"])
             corts = obj["cortes"]
             slots = r.loc["slots"]
             car = r.loc["carro"]
             term = r.loc["term"]
+            vals = r.loc["vals"]
 
-            for c in zip(corts,slots,car,term):
-                co,s,cr,t = c
+
+            for c in zip(corts,slots,car,term,vals):
+                co,s,cr,t,v = c
                 if t >0:
                     xx = "**"
                 else:
                     xx = ""
-                ss += "%.2f {S%d%s}{C%d},\t" % (co,s,xx,cr)
-            
+                if v:
+                    ss += "V - %.2f {S%d%s}{C%d},\t" % (co,s,xx,cr)
+                else:
+                    ss += "%.2f {S%d%s}{C%d},\t" % (co,s,xx,cr)
+
             ss = ss[:-2] + "]\t---\t[//%.2f//]\t<--\t%.2f%%\n\n" % (obj["scrap"],obj["Porcentaje"])
     
         ss += "Sumario de ordenes:\n"
@@ -257,7 +346,8 @@ class persiana:
         me.Lqtymade = 0 #Lo que ya se hizo
 
         me.RDY = False  #si la persiana esta lista
-
+        me.VRDY = False #Revisa si ya fue contabilizado el Valance
+        me.LRDY = False #Revisa si ya estan listos los louvers
         
         if me.nps[2] == "40":
             me.LouverLong = 192.
@@ -281,29 +371,31 @@ class persiana:
             me.Vmade = None
             me.Vmeas = None
 
-    def setCut(me,corte):
-        if not me.RDY:
-            aff = False
-            if me.Lmeas == corte:
-                me.Lqtymade += 1
-                aff = True
-            else:
-                if me.Vmade == 0:
-                    if me.Vmeas == corte:
-                        me.Vmade = 1
-                        aff = True
-
-            me.isReady()
+    def setCut(me,corte): #revisa si un valance o corte fue contabilizado en la persiana
+        if not me.RDY: #Si no esta lista
+            aff = False #Init
+            if me.Lmeas == corte and not me.LRDY: #si el corte de entrada es igual a la medida de louver
+                me.Lqtymade += 1 #aumenta los cortes
+                aff = True #Retorna que efectivamente se metio un corte
+            else: #Si no verifica 
+                if me.Vmade == 0: #Si aun  no esta contabilizado el valance
+                    if me.Vmeas == corte: #si es igual a la medida del valance
+                        me.Vmade = 1 #deja el valance como hecho
+                        me.VRDY = True
+                        aff = True #retorna que si se meti� un corte
+            me.isReady()#Computa si la persiana ya esta lista
             return aff
         else:
-            return False
+            return False #Si esta lista
 
 
     def isReady(me):
+        me.LRDY = me.Lqty == me.Lqtymade
         if not (me.Vmade is None):
-            me.RDY = me.Vmade == 1 and me.Lqty == me.Lqtymade
+            me.RDY = me.Vmade == 1 and me.LRDY
         else:
-            me.RDY = me.Lqty == me.Lqtymade
+            me.RDY = me.LRDY
+        
     
     def getVW(me):
         return me.Vmeas
@@ -339,7 +431,7 @@ class sortHandler:
         solverdir = 'cbc.exe'  # extracted and renamed CBC solver binary
         #solverdir = 'Cbc-2.7.5-win32-cl15icl11.1\\bin\\cbc.exe'  # extracted and renamed CBC solver binary
         solverdir = os.path.join(cwd, solverdir)
-        print(solverdir)
+        #print(solverdir)
         me.solver = pulp.COIN_CMD(path=solverdir)
 
     #Algorimtmo optimizador
@@ -408,8 +500,11 @@ class sortHandler:
             perc = scrap*100./me.stS
             percs = [x/me.stS for x in oor]
 
+            dic = {"cortes" : tuple(oor), "veces" : times, "scrap" : scrap, "Porcentaje": perc}
+            fz = frozenset(dic.items())
             
-            me.ordersSimple.append({"cortes" : oor, "veces" : times, "scrap" : scrap, "Porcentaje": perc})
+            
+            me.ordersSimple.append(fz)
             #me.ordersSimple.append([oor,times,scrap,perc])
             me.ordersForReport.append([oor,percs,isScrap,times,scrap,perc])
 
@@ -436,6 +531,7 @@ class sortHandler:
         num_tot = 0
 
         for i,o in enumerate(me.ordersSimple):
+            o = dict(o)
             num_tot += o["veces"]
        
 
