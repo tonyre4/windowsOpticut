@@ -1,11 +1,17 @@
 # -*- coding: utf-8 -*-
-
+from subprocess import call as cmddo
+from tkinter import filedialog
+from tkinter import messagebox
+import tkinter as tk
+from tkinter import ttk
 import os
 import numpy as np
-import sys
 #from scipy.optimize import minimize,brute
 from pulp import *
 import pandas as pd
+import sys
+
+#sys.setdefaultencoding('utf-8')
 
 class optiti:
     def __init__(me,dictt):
@@ -93,7 +99,7 @@ class ordenes:
             print(r.at["idx"],"\t",dict(r.at["obj"])["cortes"],"\t",r.at["slots"],"\t",r.at["carro"],"\t",r.at["term"],"\t",r.at["vals"])
             print("$$"*20)
  
-    def printReport3(me, optimizado):
+    def printReport3(me, optimizado,opath):
 
         TODO = [] # D:
 
@@ -276,17 +282,48 @@ class ordenes:
             #print(r.loc["idx"])#,r.loc["obj"].mydict["cortes"], r.loc["slots"], r.loc["carro"], r,loc["term"])
             #exit()
 
-        me.writeReport(df,wo) #Mete las ordenes y el resumen de cada numero de parte
+        me.writeReport(df,wo,opath) #Mete las ordenes y el resumen de cada numero de parte
 
-
-
-    def writeReport(me,df,wo):
-        
-        ss = "Patrones de corte:\n"
+    
+    def calcTots(me,df):
+        me.totLouv = 0
+        me.totScrap = 0.
+        me.totScrapP = 0.
 
         for r in df.iterrows():
             r = r[1]
-            ss += "%d veces:\t[" % (r.loc["veces"])
+            dic = dict(r.at["obj"])
+            me.totLouv += r.loc["veces"]
+            me.totScrap += dic["scrap"] * r.loc["veces"]
+
+        me.meanScrap = me.totScrap/me.totLouv
+        me.meanScrapP = (me.meanScrap/me.LouverLong)*100.
+
+
+    def getTots(me,df):
+        me.calcTots(df)
+
+        ss = "Louvers totales: %d\n" %  (me.totLouv)
+        ss += "Scrap total: %.2fin\n" % (me.totScrap)
+        ss += "Scrap por Louver: %.2fin --> " % (me.meanScrap)
+        ss += "%.2f%%\n" % (me.meanScrapP)
+        return ss
+
+
+    def writeReport(me,df,wo,opath):
+        
+        ss = "Numero de parte: %s\n" % (me.np)
+
+        ss += me.getTots(df)
+    
+        ss += "--"*20
+
+        ss += "\n\n\nPatrones de corte:\n"
+
+        for i,r in enumerate(df.iterrows()):
+            ss += "Patron [%d]:\n" % (i+1)
+            r = r[1]
+            ss += "x%d\t>>>\t[" % (r.loc["veces"])
 
             obj = dict(r.loc["obj"])
             corts = obj["cortes"]
@@ -298,18 +335,21 @@ class ordenes:
 
             for c in zip(corts,slots,car,term,vals):
                 co,s,cr,t,v = c
+                ci = int(co)
+                fr = (co-ci).as_integer_ratio()
+                frs = " "
+                if not fr==(0,1):
+                    frs += str(fr[0]) + "/" + str(fr[1]) + " "
+                xx = ""
                 if t >0:
-                    xx = "**"
-                else:
-                    xx = ""
+                    xx += "**"
                 if v:
-                    ss += "V - %.2f {S%d%s}{C%d},\t" % (co,s,xx,cr)
-                else:
-                    ss += "%.2f {S%d%s}{C%d},\t" % (co,s,xx,cr)
+                    ss += "V - "
+                ss += "%d%s{S%d%s}{C%d},\t" % (ci,frs,s,xx,cr)
 
             ss = ss[:-2] + "]\t---\t[//%.2f//]\t<--\t%.2f%%\n\n" % (obj["scrap"],obj["Porcentaje"])
     
-        ss += "Sumario de ordenes:\n"
+        ss += "\nSumario de ordenes:\n"
 
         for i,w in enumerate(wo):
             ss += "C%d -> [" % (i+1)
@@ -318,10 +358,11 @@ class ordenes:
             ss =  ss[:-2] + "]\n"
 
         ss += "\n"
-            #print(ss)
-            #print(obj)
-            #exit()
 
+        nn = me.np.replace("-","_") + "_report.txt"
+
+        with open(opath+nn,"w+") as f:
+            f.write(ss)
 
         print(ss)
 
@@ -423,8 +464,8 @@ class sortHandler:
         #me.printOrders()
         pd.set_option('display.max_columns', None)
         pd.set_option('display.max_colwidth', -1)
-        print(me.cuts)
-        me.ordhand.printReport3(me.ordersSimple)
+        #print(me.cuts)
+        me.ordhand.printReport3(me.ordersSimple,path_r)
 
     def loadsolver(me):
         cwd = os.getcwd()
@@ -640,9 +681,6 @@ class sortHandler:
 
         #me.pdfRun()
 
-
-
-
 def printReq(mat):
         ss = "**Requisicion de materiales**\n"
         ss += str("$$"*25)
@@ -656,24 +694,77 @@ def printReq(mat):
         with open("req.txt", "w+") as f:
             f.write(ss)
 
-    
 
+def browsefunc(ent,mode):
+    if mode==0:
+        filename = filedialog.askopenfilename()
+    if mode==1:
+        filename = filedialog.askdirectory() + "/"
+    
+    ent.delete(0,tk.END)
+    ent.insert(0,filename)
+    
+def checker(e1,e2,root):
+    print("entra")
+    R = dosolve(e1.get(),e2.get(),root)
+    if R=="opth":
+        messagebox.showerror("Error","No se selecciono una carpeta de salida valida.")
+    if R=="noread":
+        messagebox.showerror("Error","No se selecciono un archivo csv valido.")
+    if R=="csv":
+        messagebox.showerror("Error","No se selecciono un archivo csv.")
+    if R=="OK":
+        messagebox.showinfo("OK", "Reporte generado con exito")
+        cmddo("explorer.exe %s"%e2.get().replace("/","\\"),shell=True)
+
+def g(w,c,r):
+    w.grid(column=c,row=r)
 
 #if __name__ == "__main__":
 def main():
+    root = tk.Tk()
+    #Titulo
+    root.title("DEMO - Optimizador de cortes")
+    root.iconbitmap("dmm.ico")
+    root.resizable(False, False)
+    
+    #Widgets
+    entrycsv = ttk.Entry(root,width=100)
+    excsv = tk.Button(root,text="...",command= lambda: browsefunc(entrycsv,0))
+    pathsal = ttk.Entry(root,width=100)
+    pathsalb = tk.Button(root,text="...",command= lambda: browsefunc(pathsal,1))
+    bsol = tk.Button(root,text="Resolver",command=lambda:checker(entrycsv,pathsal, root))
+
+    #Packing
+    g(tk.Label(root, text="Elige archivo csv:"),0,0)
+    g(entrycsv,0,1)
+    g(excsv,1,1)
+    g(tk.Label(root, text="Elige carpeta de destino:"),0,2)
+    g(pathsal,0,3)
+    g(pathsalb,1,3)
+    g(bsol,1,4)
+
+    messagebox.showinfo("Atencion!", "Esto es una version Beta por lo que no se garantiza un funcionamiento optimo")
+    root.mainloop()
+
+
+def dosolve(csv,opth, root):
     np.seterr(divide='ignore')
-    try:
-        csv = sys.argv[1]
-    except:
-        print("No hay archivo csv de entrada...")
-        exit()
 
     path_r = "./reports/"
 
     type_dict  = {"WorkOrderNumber" : "str"}
 
-    data = pd.read_csv(csv,sep=";",dtype = type_dict)
-    
+    if opth=="":
+        return "opth"
+    if csv=="":
+        return "csv"
+
+    try:
+        data = pd.read_csv(csv,sep=";",dtype = type_dict)
+    except:
+        return "noread"
+        
     
     #Solo louvers
     sl = data.dropna(axis=0, subset=['FinalLouverLengthNumeric'])
@@ -697,10 +788,11 @@ def main():
         cuts = din.loc[din["LouverComponentNumber"]== pp ,["WorkOrderNumber","FinalLouverLengthNumeric","LouverQty", "ValanceInsert ComponentNumber","ValanceBaseWidthNumeric"]]
 
         #Corre optimizador
-        A = sortHandler(192.,cuts,p,path_r)
+        A = sortHandler(192.,cuts,p,opth)
         reqs.append([p,A.getReq()])
     
     #printReq(reqs)
         #exit()
+    return "OK"
 
     
