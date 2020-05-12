@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-
+from prettytable import PrettyTable
 from subprocess import check_output as cmddo
 from tkinter import filedialog
 from tkinter import messagebox

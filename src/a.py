@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from prettytable import PrettyTable
 from subprocess import call as cmddo
 from tkinter import filedialog
 from tkinter import messagebox
@@ -48,6 +49,13 @@ class ordenes:
             else:
                 if not p.Vbool is None:
                     print("ATENCION!. El color del Valance de X no es el mismo que del louver. Este programa aún no está preparado para esta combinacion!")
+       
+        #temp = []
+
+        #for x in cuts:
+        #    temp.append(float(x[0]),int(x[1]))
+        #    print(x)
+
         
 
         #Valores de cortes ordenados
@@ -169,7 +177,9 @@ class ordenes:
         df = df.sort_values(by=['carord','slotord'])
 
         #Computa el numero de carros maximos y slots maximos por carro
+        
         maxc = int(me.slotCtr/10)
+
         maxs = []
         for i in range(maxc):
             if i != maxc:
@@ -177,7 +187,7 @@ class ordenes:
         else:
             c = int(me.slotCtr%10)
             if c!= 0:
-                maxs.append(int(me.slotCtr%10))
+                maxs.append(c)
      
 
         #me.printdf(df)
@@ -251,11 +261,20 @@ class ordenes:
         #me.printdf(df)
         #print("--"*20)
 
+        print (maxc)
+        print(maxs)
+        print (me.slotCtr)
 
         #Computa los finales de cada orden
         wo = [] # Aqui almacena de cada carro por cada slot el worktag de cada cosa
-        for i in range(maxc+1): #por cada carro
+        if int(me.slotCtr%10)==0:
+            addi = 0
+        else:
+            addi = 1
+
+        for i in range(maxc+addi): #por cada carro
             cw = []
+            print(i)
             for ii in range(maxs[i]): #Para el rango maximo de slots por carro
                 #Para encontrar worktags
                 for p in me.ps:
@@ -282,7 +301,7 @@ class ordenes:
             #print(r.loc["idx"])#,r.loc["obj"].mydict["cortes"], r.loc["slots"], r.loc["carro"], r,loc["term"])
             #exit()
 
-        me.writeReport(df,wo,opath) #Mete las ordenes y el resumen de cada numero de parte
+        return me.writeReport(df,wo,opath) #Mete las ordenes y el resumen de cada numero de parte
 
     
     def calcTots(me,df):
@@ -296,6 +315,7 @@ class ordenes:
             me.totLouv += r.loc["veces"]
             me.totScrap += dic["scrap"] * r.loc["veces"]
 
+        me.totLouvft = me.totLouv*me.LouverLong
         me.meanScrap = me.totScrap/me.totLouv
         me.meanScrapP = (me.meanScrap/me.LouverLong)*100.
 
@@ -304,6 +324,7 @@ class ordenes:
         me.calcTots(df)
 
         ss = "Louvers totales: %d\n" %  (me.totLouv)
+        ss = "Distancia total: %d ft\n" %  (me.totLouvft)
         ss += "Scrap total: %.2fin\n" % (me.totScrap)
         ss += "Scrap por Louver: %.2fin --> " % (me.meanScrap)
         ss += "%.2f%%\n" % (me.meanScrapP)
@@ -367,6 +388,8 @@ class ordenes:
         print(ss)
 
         me.df = df
+
+        return {"LouvQty": me.totLouv,"ftLouv":me.totLouvft ,"ftScrap":me.totScrap,"meanScrap":me.meanScrap,"pMeanScrap":me.meanScrapP}
 
 
 
@@ -465,20 +488,21 @@ class sortHandler:
         pd.set_option('display.max_columns', None)
         pd.set_option('display.max_colwidth', -1)
         #print(me.cuts)
-        me.ordhand.printReport3(me.ordersSimple,path_r)
+        me.req = me.ordhand.printReport3(me.ordersSimple,path_r)
 
-    def loadsolver(me):
-        cwd = os.getcwd()
-        solverdir = 'cbc.exe'  # extracted and renamed CBC solver binary
-        #solverdir = 'Cbc-2.7.5-win32-cl15icl11.1\\bin\\cbc.exe'  # extracted and renamed CBC solver binary
-        solverdir = os.path.join(cwd, solverdir)
-        #print(solverdir)
-        me.solver = pulp.COIN_CMD(path=solverdir)
+    def loadsolver(me): #carga el cdw.exe
+        if os.name == 'nt':
+            cwd = os.getcwd()
+            solverdir = 'cbc.exe'  # extracted and renamed CBC solver binary
+            #solverdir = 'Cbc-2.7.5-win32-cl15icl11.1\\bin\\cbc.exe'  # extracted and renamed CBC solver binary
+            solverdir = os.path.join(cwd, solverdir)
+            #print(solverdir)
+            me.solver = pulp.COIN_CMD(path=solverdir)
 
     #Algorimtmo optimizador
     ########################
     ########################
-    def getBest(me):
+    def getBest(me): #Obtiene la mejor combinacion de cortes
         prob = LpProblem("Cut_problem",LpMaximize)
 
         Xs = []
@@ -495,9 +519,10 @@ class sortHandler:
         prob.objective = prob.objective == me.stS - little
 
         prob += me.stS - (c)  >= little , "No menor que cero"
-        #prob.solve()
-        prob.solve(me.solver)
-
+        if os.name == 'nt':
+            prob.solve(me.solver)
+        else:
+            prob.solve()
 
         XXX = np.ones(me.measures.shape[0])
 
@@ -510,7 +535,7 @@ class sortHandler:
 
         return np.array(XXX,np.uint)
     
-    def getOrders(me,p=False):
+    def getOrders(me,p=False): #Funcion que computa el optimizador
         while np.sum(me.counters)>0:
             bs = me.getBest()
             bs = bs.astype(np.uint)
@@ -593,12 +618,15 @@ class sortHandler:
             print("-"*70)
             print("")
 
-    def getReq(me):
+    def getReq(me): #Compila datos de requisici�n y scrap
         try:
             return me.req
-        except:
-            me.printRequ()
-            return me.req
+        except Exeption as e:
+            print("No se computo la requisicion")
+            print(e)
+            exit()
+            #me.printRequ()
+            #return me.req
 
    
     def printOrders(me,p = False, gr = True):
@@ -681,19 +709,54 @@ class sortHandler:
 
         #me.pdfRun()
 
-def printReq(mat):
+def printReq(path,mat): #Imprime requisicion y reporte de scrap
+        x1 = PrettyTable()
+        x2 = PrettyTable()
+
+        x1.field_names = ["Numero de parte", "Distancia (ft)", "Scrap (ft)", "Scrap promedio (ft)", "Scrap (%)"]
+        x2.field_names = ["Numero de parte", "Qty", "Distancia (ft)"]
+
+        meani = []
+        sss = "==Reporte de scrap Gral==\n"
+        sss += str("$$"*25)
+        sss += " \n"
+        #sss += "Numero de parte\t\tDistancia\t\tScrap ft\t\t%Scrap\t\t\n"
+
+
         ss = "**Requisicion de materiales**\n"
         ss += str("$$"*25)
         ss += " \n"
-        ss += "Numero de parte\t\tQty\t\tTot ft\t\t%\n"
+        #ss += "Numero de parte\t\tQty\t\tTot ft\t\t%\n"
         for p in mat:
-            s = p[0] + "\t\t" + "%d"%(p[1][0]) + "\t\t" +  "%.2f"%(p[1][1]) + "\t\t" + "%.2f%%"%(p[1][2]) + " \n"
-            ss += s
+            ndp = p[0] #numero de parte
 
-        ss += "$$"*25
-        with open("req.txt", "w+") as f:
+            s = ndp + "\t\t" + "%d"%(p[1]["LouvQty"]) + "\t\t" +  "%.2f"%(p[1]["ftLouv"]) + " \n"
+            s1 = ndp + "\t\t" + "%.2f"%(p[1]["ftLouv"]) + "\t\t" +  "%.2f"%(p[1]["ftScrap"]) + "\t\t" +"%.2f"%(p[1]["pMeanScrap"]) + "\t\t" +"%.2f"%(p[1]["meanScrap"]) +" \n"
+            #ss += s
+            #sss += s1
+
+            x1.add_row([ndp,p[1]["ftLouv"],p[1]["ftScrap"],"%.2f"%p[1]["meanScrap"],"%.2f"%p[1]["pMeanScrap"] ])
+            x2.add_row([ndp,p[1]["LouvQty"],"%.2f"%p[1]["ftLouv"]])
+
+            meani.append(p[1]["pMeanScrap"])
+
+        ss+=x2.get_string() + "\n"
+        sss+=x1.get_string() + "\n"
+
+        #ss += "$$"*25
+        sss += "$$"*25
+
+        meani = np.array(meani)
+        meani = np.mean(meani)
+
+        sss += "\nProrcentaje de media de Scrap Global: %.2f%%" % meani
+
+        with open(path + "requisicion.txt", "w+") as f:
             f.write(ss)
+        with open(path + "scrapRprt.txt", "w+") as f:
+            f.write(sss)
 
+        #return {"LouvQty": me.totLouv,"ftScrap":me.totScrap,"meanScrap":me.meanScrap,"pMeanScrap":me.meanScrapP}
 
 def browsefunc(ent,mode):
     if mode==0:
@@ -725,7 +788,7 @@ def main():
     root = tk.Tk()
     #Titulo
     root.title("DEMO - Optimizador de cortes")
-    root.iconbitmap("dmm.ico")
+    #root.iconbitmap("dmm.ico")
     root.resizable(False, False)
     
     #Widgets
@@ -753,16 +816,18 @@ def dosolve(csv,opth, root):
 
     path_r = "./reports/"
 
-    type_dict  = {"WorkOrderNumber" : "str"}
+    type_dict  = {"WorkOrderNumber" : "str", "LouverComponentNumber": "str", "FinalLouverLengthNumeric":"float", "LouverQty" : "int"}
 
     if opth=="":
+        print("opth: ",opth)
         return "opth"
     if csv=="":
         return "csv"
 
     try:
-        data = pd.read_csv(csv,sep=";",dtype = type_dict)
-    except:
+        data = pd.read_csv(csv,sep=",",dtype = type_dict)
+    except Exception as e:
+        print(e)
         return "noread"
         
     
@@ -791,7 +856,7 @@ def dosolve(csv,opth, root):
         A = sortHandler(192.,cuts,p,opth)
         reqs.append([p,A.getReq()])
     
-    #printReq(reqs)
+    printReq(opth,reqs)
         #exit()
     return "OK"
 
