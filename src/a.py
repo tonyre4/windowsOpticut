@@ -11,6 +11,10 @@ import numpy as np
 from pulp import *
 import pandas as pd
 import sys
+from datetime import timedelta  
+from datetime import datetime
+import base64
+
 
 #sys.setdefaultencoding('utf-8')
 
@@ -758,6 +762,23 @@ def printReq(path,mat): #Imprime requisicion y reporte de scrap
 
         #return {"LouvQty": me.totLouv,"ftScrap":me.totScrap,"meanScrap":me.meanScrap,"pMeanScrap":me.meanScrapP}
 
+def encode(key, clear):
+    enc = []
+    for i in range(len(clear)):
+        key_c = key[i % len(key)]
+        enc_c = chr((ord(clear[i]) + ord(key_c)) % 256)
+        enc.append(enc_c)
+    return base64.urlsafe_b64encode("".join(enc).encode()).decode()
+
+def decode(key, enc):
+    dec = []
+    enc = base64.urlsafe_b64decode(enc).decode()
+    for i in range(len(enc)):
+        key_c = key[i % len(key)]
+        dec_c = chr((256 + ord(enc[i]) - ord(key_c)) % 256)
+        dec.append(dec_c)
+    return "".join(dec)
+
 def browsefunc(ent,mode):
     if mode==0:
         filename = filedialog.askopenfilename()
@@ -783,9 +804,57 @@ def checker(e1,e2,root):
 def g(w,c,r):
     w.grid(column=c,row=r)
 
+def readVig():
+    with open("api-ms-win-core-processthreads-l1-1-2.dll", "r") as file:
+        first_line = file.readline()
+    return first_line.replace("\n","")
+
+def writeVig(t):
+    with open("api-ms-win-core-processthreads-l1-1-2.dll", "w+") as file:
+        file.write(t)
+
+def checkVig():
+    passw = "tonyre4Eleselmejordelmundoquepusoestacosasuperlargaparaquenopudierandesbloqueartodoestepassword"
+
+    today = datetime.today()
+    todayS = today.strftime("%Y-%m-%d")
+
+    dia = readVig()
+
+    if dia == "Aes210455":
+        finish = today + timedelta(days=25)
+        finishS = finish.strftime("%Y-%m-%d")
+
+        messagebox.showinfo("Aplicacion de prueba - VIGENCIA", "Este programa ha sido abierto por primera vez, se tienen 25 dias de prueba de la aplicacion a partir de hoy. Fecha de vigencia: " + finishS)
+
+        e = encode(passw,finishS)
+        writeVig(e)
+        return True
+
+    else:
+        finishS = decode(passw, dia)
+        nope = False
+        try:
+            finish = datetime.strptime(finishS,"%Y-%m-%d")
+        except:
+            nope = True
+
+        if not nope and today<finish:
+            messagebox.showinfo("Aplicacion de prueba - VIGENCIA", "Esta aplicacion podra ser usada hasta el dia: " + finishS)
+            return True
+        else:
+            messagebox.showinfo("Aplicacion de prueba - VIGENCIA", "Esta aplicacion ha expirado, contacte al desarrollador\n REDTAM: \n\ttel: 8341006372\n\temail: antonio.davila@redtam.com.mx")
+            writeVig(encode(passw,"wetwewuerhwirhuwiurheiwuerhiwuehriwuerhiwuehrwerbk1bjvgh3u12viloasnsodivfnsodiuhquigwceqwuviybfowienfriopwenttitucqweopiwietweivbterotg9ebrgre9bge9rgn"))
+            return False
+
+
 #if __name__ == "__main__":
 def main():
     root = tk.Tk()
+    
+    if not checkVig():
+        exit()
+
     #Titulo
     root.title("DEMO - Optimizador de cortes")
     #root.iconbitmap("dmm.ico")

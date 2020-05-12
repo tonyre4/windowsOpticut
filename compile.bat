@@ -11,6 +11,7 @@ REM cd Cbc-2.7.5-win32-cl15icl11.1
 REM xcopy ..\..\..\..\loadout\Cbc-2.7.5-win32-cl15icl11.1 . /s/h/e/k/f/c
 copy ..\..\..\src\cbc.exe .
 copy ..\..\..\src\dmm.ico .
+copy ..\..\..\src\newapi-ms-win-core-processthreads-l1-1-2.dll api-ms-win-core-processthreads-l1-1-2.dll
 REM cd..
-main.exe 
+REM main.exe 
 cd ..\..\..
